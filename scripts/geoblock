@@ -1,0 +1,114 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          geoblock
+# Required-Start:    $local_fs $remote_fs $network $syslog $named
+# Required-Stop:     $local_fs $remote_fs $network $syslog $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Set up ipset for allowed CIDR blocks
+# Description:       Set up ipset for allowed CIDR blocks
+### END INIT INFO
+
+# Do NOT "set -e"
+
+# PATH should only include /usr/* if it runs after the mountnfs.sh script
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+DESC="Set up ipset for allowed CIDR blocks"
+NAME=geoblock
+SCRIPTNAME=/etc/init.d/$NAME
+CIDR_LIST=/etc/default/$NAME
+LOOPBACK_RULE="INPUT -i lo -j ACCEPT"
+GEOBLOCK_RULE="INPUT -m set ! --match-set geoblock src -j REJECT --reject-with icmp-host-unreachable"
+
+# Load the VERBOSE setting and other rcS variables
+. /lib/init/vars.sh
+
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.2-14) to ensure that this file is present
+# and status_of_proc is working.
+. /lib/lsb/init-functions
+
+#
+# Function that starts the daemon/service
+#
+do_refresh()
+{
+        wget -O $CIDR_LIST http://www.ipdeny.com/ipblocks/data/countries/us.zone
+
+        RETVAL="$?"
+
+        return "$RETVAL"
+}
+
+do_start()
+{
+        # Add code here, if necessary, that waits for the process to be ready
+        # to handle requests from services started subsequently which depend
+        # on this one.  As a last resort, sleep for some time.
+        ipset create geoblock hash:net
+
+        for ip in `cat $CIDR_LIST`
+        do
+                ipset add geoblock $ip
+        done
+
+        iptables -A $LOOPBACK_RULE
+        iptables -A $GEOBLOCK_RULE
+}
+
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+        iptables -D $GEOBLOCK_RULE
+        iptables -D $LOOPBACK_RULE
+
+        ipset destroy geoblock
+
+        RETVAL="$?"
+
+        return "$RETVAL"
+}
+
+case "$1" in
+  start)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Starting $DESC" "$NAME"
+        do_start
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  stop)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
+        do_stop
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  refresh)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Refreshing $CIDR_LIST" "$NAME"
+        do_refresh
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  reload)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Reloading $DESC" "$NAME"
+        do_stop
+        do_start
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  *)
+        echo "Usage: $SCRIPTNAME {start|stop|refresh|reload}" >&2
+        exit 3
+        ;;
+esac
+
+:
