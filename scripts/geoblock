@@ -17,7 +17,6 @@ DESC="Set up ipset for allowed CIDR blocks"
 NAME=geoblock
 SCRIPTNAME=/etc/init.d/$NAME
 CIDR_LIST=/etc/default/$NAME
-LOOPBACK_RULE="INPUT -i lo -j ACCEPT"
 GEOBLOCK_RULE="INPUT -m set ! --match-set geoblock src -j REJECT --reject-with icmp-host-unreachable"
 
 # Load the VERBOSE setting and other rcS variables
@@ -33,7 +32,7 @@ GEOBLOCK_RULE="INPUT -m set ! --match-set geoblock src -j REJECT --reject-with i
 #
 do_refresh()
 {
-        wget -O $CIDR_LIST http://www.ipdeny.com/ipblocks/data/countries/us.zone
+        wget -O $CIDR_LIST http://www.ipdeny.com/ipblocks/data/aggregated/us-aggregated.zone
 
         RETVAL="$?"
 
@@ -52,7 +51,6 @@ do_start()
                 ipset add geoblock $ip
         done
 
-        iptables -A $LOOPBACK_RULE
         iptables -A $GEOBLOCK_RULE
 }
 
@@ -62,7 +60,6 @@ do_start()
 do_stop()
 {
         iptables -D $GEOBLOCK_RULE
-        iptables -D $LOOPBACK_RULE
 
         ipset destroy geoblock
 
